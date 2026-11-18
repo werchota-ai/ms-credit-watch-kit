@@ -33,8 +33,13 @@ def daily_check(timer: func.TimerRequest) -> None:
     tokens = Tokens()
     res = engine.scheduled(_cfg(), tokens, _store(tokens), os.environ.get("TEAMS_WEBHOOK_URL"))
     logging.info("credit-watch scheduled: %d alerts, %d errors, sent %s", len(res["alerts"]), len(res["errors"]), res["sent"])
+    snap = res["snapshot"]
+    logging.info("credit-watch agents source: %s · timings %s", (snap.get("agents") or {}).get("source"),
+                 snap.get("timings"))
     for e in res["errors"]:
         logging.warning("check failed: %s", e)
+    for note in snap.get("notes") or []:
+        logging.warning("fallback used: %s", note)
 
 
 @app.route(route="teams", methods=["POST"], auth_level=func.AuthLevel.ANONYMOUS)
