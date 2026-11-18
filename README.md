@@ -101,3 +101,8 @@ Daily history (one JSON per day) is kept in the service's own storage; trends an
 
 - M365 admin center › Copilot › Cost management › **Credit requests** (check weekly by hand).
 - Token counts per message (Microsoft reports show credits, not tokens; reasoning models: 1 credit ≈ 100 billed tokens).
+
+## License
+
+[Apache License 2.0](LICENSE). You may use, change and share Credit Watch, also commercially. When you pass on a copy
+or a changed version, keep the [NOTICE](NOTICE) file with it. The names and brand of werchota.ai are not covered by the license.
