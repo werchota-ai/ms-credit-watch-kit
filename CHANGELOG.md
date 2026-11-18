@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.2 (18 Nov 2026)
+
+- Cards no longer list a flow twice: a flow already shown as an alert is left out of the flows list below it.
+- No "(+0)" next to environments without use.
+- The daily run logs where the per-agent figures came from, the time per check, and any fallback used
+  (Application Insights › traces).
+
 ## v1.1 (18 Nov 2026)
 
 - **Credits per agent from Microsoft's official licensing report.** The daily run now reads the Copilot Studio

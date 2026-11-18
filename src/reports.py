@@ -99,8 +99,9 @@ def _env_block(c: Card, snap: dict, history: dict, days: int | None = None) -> N
         delta = ""
         if days:
             s = daily_series({**history, snap["day"]: snap}, env_id)[-days:]
-            if s:
-                delta = f"  (+{n(sum(v for _, v in s), L)})"
+            added = sum(v for _, v in s)
+            if n(added, L) != "0":   # no "(+0)" noise for environments without use
+                delta = f"  (+{n(added, L)})"
         rows.append((cons.get(env_id, {}).get("name") or names.get(env_id, env_id),
                      T(L, "env_line", c=n(used, L), a=n(alloc, L), d=delta)))
     if rows:
@@ -148,12 +149,15 @@ def _activity_block(c: Card, snap: dict) -> None:
                                            x=a["toolCalls"], e=a["errors"])) for a in act])
 
 
-def _orphans_block(c: Card, snap: dict) -> None:
-    fl = snap.get("orphanFlows") or {}
+def _orphans_block(c: Card, snap: dict, alerts: list[dict] | None = None) -> None:
+    """Flows without a live owner; those already shown as an alert on the same card are not repeated."""
+    flagged = [a["text"] for a in alerts or [] if a.get("title") == T(c.lang, "a_flow")]
+    fl = [f for f in (snap.get("orphanFlows") or {}).values()
+          if not any(t.startswith(f"{f['name']} ({f['env']}),") for t in flagged)]
     if fl:
-        c.heading(T(c.lang, "orphans"))
+        c.heading(T(c.lang, "orphans_more") if flagged else T(c.lang, "orphans"))
         c.facts([(f["name"], f"{f['env']} · {T(c.lang, f['owner'])}"
-                  + (f" · {f['trigger']}" if f["trigger"] else "")) for f in fl.values()])
+                  + (f" · {f['trigger']}" if f["trigger"] else "")) for f in fl])
 
 
 # ---------------------------------------------------------------- reports
@@ -183,7 +187,7 @@ def weekly(cfg, snap, history, alerts_log) -> dict:
     _env_block(c, snap, history, days=7)
     _agents_block(c, snap)
     _activity_block(c, snap)
-    _orphans_block(c, snap)
+    _orphans_block(c, snap, alerts_log)
     c.heading(T(c.lang, "changes"))
     if alerts_log:
         c.facts([(f"{a['day'][5:]} · {a['title']}", a["text"]) for a in alerts_log[-15:]])
@@ -242,7 +246,7 @@ def status(cfg, snap, history, alerts) -> dict:
         c.alerts(alerts)
     _env_block(c, snap, history, days=1)
     _agents_block(c, snap, top=5)
-    _orphans_block(c, snap)
+    _orphans_block(c, snap, alerts)
     return c.build()
 
 

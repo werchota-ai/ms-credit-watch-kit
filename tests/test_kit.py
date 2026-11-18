@@ -138,6 +138,15 @@ class Tests(unittest.TestCase):
         txt = json.dumps(reports.status(CFG, last, {}, []), ensure_ascii=False)
         self.assertIn("still building the licensing report", txt)
 
+    def test_status_card_no_duplicates_no_plus_zero(self):
+        h = history(5)
+        last = h.pop(max(h))
+        alerts, _ = analysis.evaluate(CFG, last, None, h, [])
+        txt = json.dumps(reports.status(CFG, last, h, alerts), ensure_ascii=False)
+        self.assertEqual(txt.count('"title": "Old flow"'), 0)   # already shown as an alert, not listed again
+        self.assertIn("Old flow (Contoso (default)), owner account disabled", txt)
+        self.assertNotIn("(+0)", txt)
+
     def test_hmac_and_commands(self):
         secret = base64.b64encode(b"0123456789abcdef").decode()
         body = json.dumps({"text": "<at>Credit Watch</at> weekly", "from": {"name": "Anna"}}).encode()
