@@ -52,6 +52,7 @@
     "payAsYouGo": true,
     "orphanFlows": true,
     "agents": true,
+    "reportsApi": true,
     "activity": true,
     "audit": true
   }

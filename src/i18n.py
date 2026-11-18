@@ -22,6 +22,8 @@ TEXT = {
         "agents": "Top agents by credits (this month)", "limit": "limit",
         "agents_na": "Not available yet: Microsoft does not give per-agent figures to service identities in this tenant. "
                      "See PPAC › Licensing › Copilot Studio › Download report.",
+        "agents_src": "Billed credits per agent and feature from the Microsoft licensing report, as of {d}.",
+        "agents_pending": "Microsoft is still building the licensing report; the figures follow with the next daily run.",
         "activity": "Agent activity, last 7 days (Application Insights)",
         "activity_line": "{t} turns · {v} conversations · {u} users · {x} tool calls · {e} errors",
         # alerts
@@ -62,6 +64,8 @@ TEXT = {
         "agents": "Top-Agenten nach Credits (dieser Monat)", "limit": "Limit",
         "agents_na": "Noch nicht verfügbar: Microsoft liefert Werte pro Agent in diesem Tenant nicht an Dienstidentitäten. "
                      "Siehe PPAC › Lizenzierung › Copilot Studio › Bericht herunterladen.",
+        "agents_src": "Abgerechnete Credits pro Agent und Funktion aus dem Microsoft-Lizenzbericht, Stand {d}.",
+        "agents_pending": "Microsoft erstellt den Lizenzbericht noch; die Werte folgen mit dem nächsten Tageslauf.",
         "activity": "Agenten-Aktivität, letzte 7 Tage (Application Insights)",
         "activity_line": "{t} Turns · {v} Unterhaltungen · {u} Nutzer · {x} Tool-Aufrufe · {e} Fehler",
         "a_pack": "Kontingent bei {p} %", "a_pack_t": "{c} von {e} Credits in diesem Monat verbraucht.",

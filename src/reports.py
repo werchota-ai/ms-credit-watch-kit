@@ -113,14 +113,31 @@ def _agents_block(c: Card, snap: dict, top: int = 10) -> None:
         c.heading(T(c.lang, "agents"))
         c.text(T(c.lang, "agents_na"), subtle=True)
         return
-    ag = (snap.get("agents") or {}).get("items") or {}
+    src = snap.get("agents") or {}
+    if src.get("source") == "pending":
+        c.heading(T(c.lang, "agents"))
+        c.text(T(c.lang, "agents_pending"), subtle=True)
+        return
+    ag = src.get("items") or {}
+
+    def line(v):
+        s = n(v["consumed"], c.lang)
+        if v.get("limit"):
+            s += f" / {T(c.lang, 'limit')} {n(v['limit'], c.lang)}"
+        feats = sorted((v.get("features") or {}).items(), key=lambda kv: -kv[1])
+        if feats:
+            s += " · " + ", ".join(f"{f} {n(x, c.lang)}" if len(feats) > 1 else f for f, x in feats[:3])
+        if v.get("envName"):
+            s += f" · {v['envName']}"
+        return s
+
     rows = sorted(ag.items(), key=lambda kv: -kv[1].get("consumed", 0))
-    rows = [(v.get("name") or k[:8], n(v["consumed"], c.lang) + (f" / {T(c.lang, 'limit')} {n(v['limit'], c.lang)}"
-                                                                   if v.get("limit") else ""))
-            for k, v in rows[:top] if v.get("consumed")]
+    rows = [(v.get("name") or k[:8], line(v)) for k, v in rows[:top] if v.get("consumed")]
     if rows:
         c.heading(T(c.lang, "agents"))
         c.facts(rows)
+        if src.get("source") == "report":
+            c.text(T(c.lang, "agents_src", d=src.get("to", "")), subtle=True)
 
 
 def _activity_block(c: Card, snap: dict) -> None:

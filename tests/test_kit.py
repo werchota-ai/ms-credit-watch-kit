@@ -11,9 +11,10 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 import analysis  # noqa: E402
+import engine  # noqa: E402
 import reports  # noqa: E402
 import teams  # noqa: E402
-from collect import lic_base  # noqa: E402
+from collect import _agents_from_report, lic_base  # noqa: E402
 
 CFG = {"customer": "Contoso", "tenantId": "11111111-2222-3333-4444-555555555555",
        "report": {"language": "en"}, "pricing": {"currency": "EUR", "packPricePerMonth": 208},
@@ -101,6 +102,41 @@ class Tests(unittest.TestCase):
                 self.assertTrue(len(body) > 3)
                 json.dumps(card)   # serialisable
         self.assertIn("Brain", json.dumps(reports.weekly(CFG, last, h, [])))
+
+    def test_agents_from_licensing_report(self):
+        # rows in the column layout of FeatureDetailsPerResource (Power Platform API 2024-10-01), synthetic values
+        base = {"EnvironmentID": "Default-1", "EnvironmentName": "Contoso (default)", "Product": "Copilot Studio",
+                "Channel": "Teams", "LLMModel": "", "NonBilledCredits": "0.00"}
+        rows = [{**base, "ResourceID": "AAA", "ResourceName": "HR Helper", "Feature": "Process Agent", "BilledCredits": "900.50"},
+                {**base, "ResourceID": "aaa", "ResourceName": "HR Helper", "Feature": "Agent action", "BilledCredits": "99.50"},
+                {**base, "ResourceID": "bbb", "ResourceName": "Invoice flow", "Product": "Power Automate",
+                 "Feature": "Workflows", "BilledCredits": "0.00", "NonBilledCredits": "5.00"}]
+        ag = _agents_from_report(rows, "2026-11-01", "2026-11-17")
+        self.assertEqual(ag["source"], "report")
+        self.assertEqual(ag["items"]["aaa"]["consumed"], 1000.0)
+        self.assertEqual(ag["items"]["aaa"]["features"], {"Process Agent": 900.5, "Agent action": 99.5})
+        self.assertEqual(ag["items"]["bbb"]["nonBilled"], 5.0)
+        h = history(5)
+        last = h.pop(max(h))
+        last["agents"] = ag
+        txt = json.dumps(reports.weekly(CFG, last, h, []), ensure_ascii=False)
+        self.assertIn("HR Helper", txt)
+        self.assertIn("HR Helper: 1,000 · Process Agent 900, Agent action 100 · Contoso (default)", txt)
+        self.assertNotIn("Invoice flow", txt)   # nothing billed -> not listed
+        self.assertIn("Microsoft licensing report", txt)
+
+    def test_report_pending_reuses_last_figures(self):
+        h = history(5)
+        last = h.pop(max(h))
+        old = {"source": "report", "from": "2026-11-01", "to": "2026-11-04",
+               "items": {"aaa": {"name": "HR Helper", "consumed": 50.0, "features": {"Process Agent": 50.0}}}}
+        h[max(h)]["agents"] = old
+        last["agents"] = {"source": "pending", "items": {}}
+        engine._reuse_report(last, h)
+        self.assertEqual(last["agents"], old)
+        last["agents"] = {"source": "pending", "items": {}}
+        txt = json.dumps(reports.status(CFG, last, {}, []), ensure_ascii=False)
+        self.assertIn("still building the licensing report", txt)
 
     def test_hmac_and_commands(self):
         secret = base64.b64encode(b"0123456789abcdef").decode()
