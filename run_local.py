@@ -59,9 +59,7 @@ if a.report in ("agents", "m365") and not a.scheduled:
         card = reports.m365_users(cfg, snap, users, f"{now.strftime('%Y-%m')}-01 … {(now - dt.timedelta(days=1)).strftime('%Y-%m-%d')}")
     post(hook, card)
     print(card["attachments"][0]["content"]["actions"][0]["card"]["body"][0]["value"])
-    print("
-posted to Teams." if hook else "
-(dry run - nothing posted)")
+    print("\nposted to Teams." if hook else "\n(dry run - nothing posted)")
     sys.exit(0)
 
 if a.scheduled:
