@@ -1,0 +1,58 @@
+{
+  "customer": "Contoso GmbH",
+  "tenantId": "00000000-0000-0000-0000-000000000000",
+
+  "azure": {
+    "subscriptionId": "00000000-0000-0000-0000-000000000000",
+    "location": "westeurope",
+    "resourceGroup": "rg-credit-watch",
+    "namePrefix": "creditwatch",
+    "owner": "it@contoso.com"
+  },
+
+  "powerPlatform": {
+    "flowCheckEnvironments": ["default"]
+  },
+
+  "schedule": {
+    "dailyCron": "0 0 6 * * *",
+    "weeklyDay": "Monday",
+    "monthlyDay": 1,
+    "dailyPost": "alerts-only"
+  },
+
+  "thresholds": {
+    "packPercent": [70, 85, 95],
+    "environmentPercent": 80,
+    "spikeFactor": 3,
+    "spikeMinCredits": 200
+  },
+
+  "report": {
+    "language": "en",
+    "title": "Copilot credit watch"
+  },
+
+  "pricing": {
+    "currency": "EUR",
+    "packPricePerMonth": 0,
+    "paygPricePerCredit": 0.01
+  },
+
+  "appInsights": {
+    "workspaceId": "",
+    "workspaceResourceId": ""
+  },
+
+  "checks": {
+    "credits": true,
+    "aiBuilder": true,
+    "allocations": true,
+    "environments": true,
+    "payAsYouGo": true,
+    "orphanFlows": true,
+    "agents": true,
+    "activity": true,
+    "audit": true
+  }
+}

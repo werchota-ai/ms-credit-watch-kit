@@ -1,0 +1,53 @@
+// Credit Watch - KQL for Copilot Studio environment-level telemetry (Application Insights / Log Analytics).
+// Prerequisite: PPAC > Admin > Data export > Application Insights, export type "Copilot Studio" (managed environments only).
+// In Application Insights > Logs use the table "dependencies" and "customDimensions";
+// in the Log Analytics workspace use "AppDependencies" and "Properties" (as below). Copilot credits are NOT in this data:
+// it shows activity (turns, tools, models, errors) that explains the credits seen in Credit Watch.
+
+// 1) Activity per agent, last 7 days (the same query Credit Watch runs for the weekly report)
+AppDependencies
+| where TimeGenerated > ago(7d) and Name in ("InvokeAgent", "ExecuteTool")
+| extend agent = tostring(Properties["gen_ai.agent.name"]), conv = tostring(Properties["gen_ai.conversation.id"]),
+         user = tostring(Properties["user.email"])
+| summarize turns = countif(Name == "InvokeAgent"), conversations = dcount(conv), users = dcount(user),
+            toolCalls = countif(Name == "ExecuteTool"), errors = countif(Success == false) by agent
+| order by turns desc
+
+// 2) Turns per agent per day (spot spikes; compare with the "Credits per day" block)
+AppDependencies
+| where TimeGenerated > ago(30d) and Name == "InvokeAgent"
+| summarize turns = count() by agent = tostring(Properties["gen_ai.agent.name"]), bin(TimeGenerated, 1d)
+| render timechart
+
+// 3) Which tools are called most (tools are a main cost driver)
+AppDependencies
+| where TimeGenerated > ago(7d) and Name == "ExecuteTool"
+| summarize calls = count(), failed = countif(Success == false)
+          by agent = tostring(Properties["gen_ai.agent.name"]), tool = tostring(Properties["gen_ai.tool.name"])
+| order by calls desc
+
+// 4) Models in use per agent (reasoning models cost 10 credits per 1,000 billed tokens)
+AppDependencies
+| where TimeGenerated > ago(7d) and Name == "InvokeAgent"
+| summarize turns = count() by agent = tostring(Properties["gen_ai.agent.name"]), model = tostring(Properties["gen_ai.request.model"])
+| order by turns desc
+
+// 5) Heaviest users (who drives the use)
+AppDependencies
+| where TimeGenerated > ago(7d) and Name == "InvokeAgent"
+| summarize turns = count(), conversations = dcount(tostring(Properties["gen_ai.conversation.id"]))
+          by user = tostring(Properties["user.email"]), agent = tostring(Properties["gen_ai.agent.name"])
+| top 20 by turns desc
+
+// 6) Errors in the last 24 h (for an Azure Monitor alert rule)
+AppDependencies
+| where TimeGenerated > ago(24h) and Success == false
+| project TimeGenerated, Name, agent = tostring(Properties["gen_ai.agent.name"]), tool = tostring(Properties["gen_ai.tool.name"]),
+          error = tostring(Properties["Status.message"])
+| order by TimeGenerated desc
+
+// 7) Credit Watch itself: did the daily run happen, did checks fail? (its own Application Insights)
+traces
+| where timestamp > ago(7d) and (message startswith "credit-watch" or message startswith "check failed")
+| project timestamp, message
+| order by timestamp desc
