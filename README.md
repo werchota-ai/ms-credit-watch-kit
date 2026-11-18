@@ -1,10 +1,72 @@
-# Credit Watch kit
+# Credit Watch
 
-Watches Copilot Studio / Copilot Credits and Power Platform admin changes in one tenant and reports to a Teams channel:
-daily (only when something happens), weekly, monthly, and on request (`@Credit Watch status|daily|weekly|monthly`).
-Tenant-independent: everything comes from `config.json`. Installation: see **[INSTALL.md](INSTALL.md)**.
+**Know where your Copilot credits go, before they run out.**
 
-## Files
+Copilot Studio agents, agent flows and Copilot Cowork all draw on the same pool of Copilot Credits.
+When the pool or an environment's allocation is empty, agents stop answering. Microsoft's own warnings
+reach only some admins, often late, and nothing tells you *which* agent used the credits.
+
+Credit Watch is a small service in your own Azure subscription. Every morning it reads your credit figures
+from Microsoft and posts a short card to a Teams channel, and only when something needs attention.
+
+## What you get
+
+| | |
+|---|---|
+| **Early warning** | Pack at 70 / 85 / 95 %, forecast for the end of the month, the day the pack will run out |
+| **Who uses the credits** | Credits per agent and per flow, with the feature behind them (for example *Process Agent*, *Agent action*), taken from Microsoft's official licensing report |
+| **Per environment** | Used versus allocated; environments that use credits without their own allocation |
+| **Unusual days** | A day with about three times the usual use is flagged |
+| **Changes nobody announces** | Allocations changed, pay-as-you-go linked or unlinked, environments created or removed, and who did it |
+| **Forgotten flows** | Flows that still run under a disabled or deleted account |
+| **Reports** | Weekly on Monday, monthly on the 1st, in English or German |
+| **On request** | Type `@Credit Watch status`, `daily`, `weekly` or `monthly` in the channel |
+
+Example of a weekly card (synthetic data):
+
+```
+Copilot credit watch · Weekly report
+Contoso GmbH · Data as of 2026-11-17
+
+Credit pack            17,200 of 25,000 used (69 %)
+Month-end forecast     30,400 / 25,000
+Pack runs out around   2026-11-24
+
+By environment (used / allocated)
+Contoso (default)      14,100 / 20,000
+Sales Pilot             3,100 / 0
+
+Top agents by credits (this month)
+HR Assistant           12,800 · Process Agent
+Sales Pilot             3,100 · Agent action 2,700, Classic answer 400
+IT Helpdesk             1,300 · Generative answer
+```
+
+## Safe by design
+
+- **Read only.** It reads figures and settings. It cannot change anything in Microsoft 365 or Power Platform.
+- **Runs in your tenant.** Your Azure subscription, your storage, your Teams channel. No data leaves your tenant, and
+  no message content is read.
+- **No passwords in files.** It signs in with an Azure managed identity; Teams commands are checked with a signature.
+- **Low cost.** Usually under €1 per month in Azure (Functions Flex Consumption and a small storage account).
+- **Easy to remove.** One command deletes the service and all its permissions.
+
+## Getting started
+
+About 45 minutes, no coding: fill in one file (`config.json`) and run one script.
+Step-by-step guide: **[INSTALL.md](INSTALL.md)**. Changes per version: **[CHANGELOG.md](CHANGELOG.md)**.
+
+You need a Power Platform administrator, an Azure subscription owner and a Teams team owner
+(one person can have all three roles).
+
+Built and maintained by [werchota.ai](https://www.werchota.ai). We are happy to install it with you, adapt the alerts
+to your needs, or connect it to your Copilot Studio governance.
+
+---
+
+## For administrators and developers
+
+### Files
 
 | Path | Purpose |
 |---|---|
@@ -20,7 +82,7 @@ Tenant-independent: everything comes from `config.json`. Installation: see **[IN
 | `tests/` | offline tests with synthetic data: `python -I -m unittest discover -s tests` |
 | `kql/agent-activity.kql` | KQL for Copilot Studio telemetry in Application Insights |
 
-## Data sources
+### Data sources
 
 | Data | Source | Note |
 |---|---|---|
@@ -35,9 +97,7 @@ Tenant-independent: everything comes from `config.json`. Installation: see **[IN
 
 Daily history (one JSON per day) is kept in the service's own storage; trends and forecasts are computed from it.
 
-Changes per version: **[CHANGELOG.md](CHANGELOG.md)**.
-
-## Not covered (Microsoft offers no API yet)
+### Not covered (Microsoft offers no API yet)
 
 - M365 admin center › Copilot › Cost management › **Credit requests** (check weekly by hand).
 - Token counts per message (Microsoft reports show credits, not tokens; reasoning models: 1 credit ≈ 100 billed tokens).

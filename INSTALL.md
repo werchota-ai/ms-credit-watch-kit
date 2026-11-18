@@ -50,9 +50,9 @@ Python is **not** needed on your PC.
 
 ---
 
-## Step 3. Unpack the kit
+## Step 3. Download the kit
 
-1. Unpack `credit-watch-kit.zip` to `C:\credit-watch-kit`.
+1. Open [github.com/werchota-ai/ms-credit-watch-kit](https://github.com/werchota-ai/ms-credit-watch-kit), select **Code › Download ZIP** (or a version under **Tags**), and unpack it to `C:\credit-watch-kit`.
 2. In that folder, copy `config.example.json` and rename the copy to **`config.json`**.
 
 ---
