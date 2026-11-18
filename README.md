@@ -14,7 +14,7 @@ from Microsoft and posts a short card to a Teams channel, and only when somethin
 | | |
 |---|---|
 | **Early warning** | Pack at 70 / 85 / 95 %, forecast for the end of the month, the day the pack will run out |
-| **Who uses the credits** | Credits per agent and per flow, with the feature behind them (for example *Process Agent*, *Agent action*), taken from Microsoft's official licensing report |
+| **Who uses the credits** | Credits per agent and per flow, with the feature behind them (for example *Process Agent*, *Agent action*), taken from Microsoft's official licensing report (optional, needs one extra admin role, see below) |
 | **Per environment** | Used versus allocated; environments that use credits without their own allocation |
 | **Unusual days** | A day with about three times the usual use is flagged |
 | **Changes nobody announces** | Allocations changed, pay-as-you-go linked or unlinked, environments created or removed, and who did it |
@@ -44,7 +44,11 @@ IT Helpdesk             1,300 · Generative answer
 
 ## Safe by design
 
-- **Read only.** It reads figures and settings. It cannot change anything in Microsoft 365 or Power Platform.
+- **Read only.** It reads figures and settings and never changes anything in Microsoft 365 or Power Platform.
+  Its permissions are read permissions, with one optional exception: credits per agent come from a Microsoft report
+  that is only given to Power Platform administrators. If you want those figures, you give the service that role
+  (it can then technically change Power Platform settings, although the code only reads). Without it, everything
+  else works and the card says that per-agent figures are not available.
 - **Runs in your tenant.** Your Azure subscription, your storage, your Teams channel. No data leaves your tenant, and
   no message content is read.
 - **No passwords in files.** It signs in with an Azure managed identity; Teams commands are checked with a signature.
@@ -89,7 +93,7 @@ to your needs, or connect it to your Copilot Studio governance.
 | Pack total, AI Builder pool | `{tenant}.tenant.api.powerplatform.com/licensing/entitlements/MCSMessages`, `/tenantCapacity/CurrencyReports` (`api-version=1`) | internal PPAC endpoints, may change without notice; a failure shows as a red line |
 | Per environment used/allocated | same host, `/environments/entitlementConsumptions/MCSMessages` | |
 | Allocations, pay-as-you-go | `api.powerplatform.com/licensing` (public, preview) | billing-policy list is often refused to service principals → environments' own link used |
-| Per agent and flow, by feature, channel, model | Official **Copilot Studio licensing report** `FeatureDetailsPerResource` ([Power Platform API 2024-10-01](https://learn.microsoft.com/rest/api/power-platform/copilotstudio/licensing-reports), public preview since Nov 2026): `POST …/copilotstudio/licensing/reports/{name}` → poll → gzip CSV | takes ~5 min, so only the daily run asks it; on-demand reports reuse the last daily result. Fallbacks: `…/licensing/entitlements/MCSMessages/resources`, then `/resourceThresholds` |
+| Per agent and flow, by feature, channel, model | Official **Copilot Studio licensing report** `FeatureDetailsPerResource` ([Power Platform API 2024-10-01](https://learn.microsoft.com/rest/api/power-platform/copilotstudio/licensing-reports), public preview since Nov 2026): `POST …/copilotstudio/licensing/reports/{name}` → poll → gzip CSV | **needs the Entra role Power Platform Administrator for the service's managed identity** (otherwise HTTP 403, InsufficientPermissions); usually ready in under a minute, at most `reportWaitSeconds` is waited, so only the daily run asks it; on-demand reports reuse the last daily result. Fallbacks: `…/licensing/entitlements/MCSMessages/resources`, then `/resourceThresholds` |
 | Environments | BAP admin API | |
 | Flows without a live owner | Dataverse `workflows` (read-only role) + Flow admin API; Graph `/users` | Flow admin API hides solution-aware flows from service principals |
 | Who changed what | Office 365 Management Activity API (`Audit.General`, Power Platform operations) | starts some hours after install; window ≤ 24 h |

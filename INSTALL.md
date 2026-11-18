@@ -194,6 +194,28 @@ Every card has a **Copy as text** button (Teams cannot copy text directly from a
 
 ---
 
+## Optional: credits per agent (Power Platform Administrator role)
+
+The cards can show credits per agent and per flow, with the feature behind them (for example *Process Agent*,
+*Agent action*). Microsoft gives this report only to **Power Platform administrators**. Without the role, the card says
+*"Not available yet"* for agents and everything else works as usual.
+
+**Before you decide:** with this role the service could technically change Power Platform settings (environments,
+credit allocations, policies). The Credit Watch code only reads, and you can check that in `src/collect.py`.
+Decide together with your security team.
+
+To give the role (needs **Global Administrator** or **Privileged Role Administrator**):
+
+1. Open the [Entra admin center](https://entra.microsoft.com) › **Roles & admins** › **Roles & admins**.
+2. Search for **Power Platform Administrator** and open it.
+3. Select **Add assignments** › **Select member(s)**, search for the service name (for example `func-creditwatch-1a2b3c`),
+   select it, then **Next** › assignment type **Active**, **Permanently assigned** › **Assign**.
+4. The next daily run (by default 06:00 UTC) reads the report; from then on the weekly, monthly and `@Credit Watch status` cards show the agents. A new role can take a few minutes, sometimes longer, to take effect.
+
+To remove it again: the same role › **Assignments** › select the service › **Remove assignment**.
+
+---
+
 ## Optional: agent activity from Application Insights (KQL)
 
 Copilot Studio can send agent telemetry (turns, tools, models, errors) of a **managed environment** to Application Insights. Credit Watch then adds an *Agent activity* block to the weekly report. The file `kql\agent-activity.kql` contains ready queries for the Azure portal.
@@ -241,7 +263,7 @@ Then remove the two Teams connections by hand: **Workflows** › `Credit Watch` 
 
 ## Security and cost
 
-- **Read only.** The service can read credit figures, environments, users' enabled/disabled state, flows and the Power Platform audit log. It cannot change anything in Microsoft 365 or Power Platform. It writes only to its own private storage and to the one Teams channel.
+- **Read only.** The service can read credit figures, environments, users' enabled/disabled state, flows and the Power Platform audit log. It does not change anything in Microsoft 365 or Power Platform. Exception: if you choose the optional per-agent figures, the service holds the Power Platform Administrator role, which would allow changes; the code still only reads. It writes only to its own private storage and to the one Teams channel.
 - **No passwords or secrets in files.** It signs in with an Azure managed identity. The Teams addresses are kept in the service settings.
 - **Teams commands are signed.** Requests without the correct Teams signature are rejected.
 - **Cost:** usually **under €1 per month** (Azure Functions Flex Consumption, small storage, 30-day logs).
