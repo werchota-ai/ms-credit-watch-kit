@@ -63,6 +63,15 @@ Step-by-step guide: **[INSTALL.md](INSTALL.md)**. Changes per version: **[CHANGE
 You need a Power Platform administrator, an Azure subscription owner and a Teams team owner
 (one person can have all three roles).
 
+## Who can see the reports
+
+Everyone in the Teams channel sees the cards and can ask `@Credit Watch status`. A manager or supervisor who wants
+to follow the credits is simply added to the channel. They need no admin role: the figures, including credits per
+agent, come from the service.
+
+**Planned, on request:** a second channel with its own schedule, for example only the weekly and monthly reports for
+management, while the IT channel keeps the daily alerts. Let us know if you need it.
+
 Built and maintained by [werchota.ai](https://www.werchota.ai). We are happy to install it with you, adapt the alerts
 to your needs, or connect it to your Copilot Studio governance.
 
