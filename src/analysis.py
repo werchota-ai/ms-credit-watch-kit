@@ -71,7 +71,8 @@ def evaluate(cfg: dict, snap: dict, prev: dict | None, history: dict, errors: li
     prev = prev or {}
     seen = dict(prev.get("notified", {})) if prev.get("month") == snap["month"] else {}
     alerts: list[dict] = []
-    names = {k: v["name"] for k, v in (snap.get("environments") or {}).items()}
+    # yesterday's names too, so a deleted environment still shows its name instead of its id
+    names = {k: v["name"] for k, v in {**(prev.get("environments") or {}), **(snap.get("environments") or {})}.items()}
 
     def add(level, title, text):
         alerts.append({"level": level, "title": title, "text": text})
