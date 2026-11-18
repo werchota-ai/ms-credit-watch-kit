@@ -43,6 +43,14 @@ def daily_series(history: dict[str, dict], env_id: str | None = None) -> list[tu
     return out
 
 
+def free_pool(snap: dict) -> float | None:
+    """Pack credits not assigned to any environment: what Cowork, Copilot Code and other M365 services can use."""
+    pk = snap.get("pack") or {}
+    if pk.get("allocatedTotal") is None or not pk.get("entitled"):
+        return None
+    return pk["entitled"] - pk["allocatedTotal"]
+
+
 def forecast(snap: dict, series: list[tuple[str, float]]) -> dict:
     pk = snap.get("pack") or {}
     if not pk.get("dataDate"):
@@ -104,6 +112,23 @@ def evaluate(cfg: dict, snap: dict, prev: dict | None, history: dict, errors: li
                                             p=pct(pk["aiConsumed"], pk["aiPurchased"])))
             seen["ai"] = True
 
+    # room left in the pack for Cowork, Copilot Code and other Microsoft 365 services
+    free = free_pool(snap)
+    if free is not None:
+        if free < th.get("freePoolMin", 1000):
+            if not seen.get("freepool"):
+                add("red" if free <= 0 else "amber", T(lang, "a_free"),
+                    T(lang, "a_free_t", f=n(max(free, 0), lang), a=n(pk["allocatedTotal"], lang), e=n(pk["entitled"], lang)))
+                seen["freepool"] = True
+        else:
+            seen.pop("freepool", None)   # warn again if it drops later
+
+    # environments that Microsoft fed from the shared pool
+    for env_id, d in (snap.get("poolDraw") or {}).items():
+        if d.get("auto") and not seen.get(f"pool:{env_id}"):
+            add("amber", T(lang, "a_pooldraw", n=names.get(env_id, env_id)), T(lang, "a_pooldraw_t", a=n(d["auto"], lang)))
+            seen[f"pool:{env_id}"] = True
+
     for env_id, c in (snap.get("consumption") or {}).items():
         state = ""
         if c["allocated"] and c["consumed"] > c["allocated"]:
@@ -135,10 +160,12 @@ def evaluate(cfg: dict, snap: dict, prev: dict | None, history: dict, errors: li
             add("info", T(lang, "a_env_gone"), prev["environments"][env_id]["name"])
 
     if "payg" in snap and "payg" in prev:
-        for pid, p in snap["payg"].items():
-            if p["environments"] != prev["payg"].get(pid, {}).get("environments"):
-                envs = ", ".join(names.get(e, e) for e in p["environments"]) or T(lang, "nobody")
-                add("amber", T(lang, "a_payg"), T(lang, "a_payg_t", n=p["name"], e=envs))
+        for pid in sorted(set(snap["payg"]) | set(prev["payg"])):
+            p, o = snap["payg"].get(pid), prev["payg"].get(pid, {})
+            now_envs = (p or {}).get("environments", [])
+            if now_envs != o.get("environments", []):
+                envs = ", ".join(names.get(e, e) for e in now_envs) or T(lang, "nobody")
+                add("amber", T(lang, "a_payg"), T(lang, "a_payg_t", n=(p or o).get("name", pid[:8]), e=envs))
 
     for fid, f in (snap.get("orphanFlows") or {}).items():
         if not seen.get(f"flow:{fid}") and ("Recurrence" in f["trigger"] or not f["trigger"]):
@@ -146,10 +173,25 @@ def evaluate(cfg: dict, snap: dict, prev: dict | None, history: dict, errors: li
             add("amber", T(lang, "a_flow"), T(lang, "a_flow_t", n=f["name"], e=f["env"], o=T(lang, f["owner"]),
                                               x="" if f["trigger"] else T(lang, "a_flow_unknown")))
 
+    # the audit log carries no environment id: name it when exactly one environment changed by that amount
+    deltas: dict[float, list] = {}
+    if "allocations" in snap and "allocations" in prev:
+        for env_id in set(prev["allocations"]) | set(snap["allocations"]):
+            dlt = snap["allocations"].get(env_id, 0) - prev["allocations"].get(env_id, 0)
+            if dlt:
+                deltas.setdefault(float(dlt), []).append(env_id)
     for ev in snap.get("audit") or []:
+        amount = ev.get("amount")
+        where = ""
+        try:
+            hit = deltas.get(float(amount)) if amount not in (None, "") else None
+        except (TypeError, ValueError):
+            hit = None
+        if hit and len(hit) == 1:
+            where = f" · {names.get(hit[0], hit[0])}"
         add("info", T(lang, "a_audit"), T(lang, "a_audit_t", k=ev["kind"].replace("_", " "), u=ev["user"],
                                           t=str(ev["time"])[:16].replace("T", " "),
-                                          a=f" ({ev['amount']})" if ev.get("amount") else ""))
+                                          a=(f" ({amount})" if amount else "") + where))
 
     if errors:
         add("red", T(lang, "a_errors"), " · ".join(errors))

@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.3 (18 Nov 2026)
+
+Lessons from a real case: the pack still had ~9,000 unused credits, but Copilot Cowork said "monthly credit limit".
+Environments had 23,000 of 25,000 reserved, and a test environment took the last 2,000 through "Draw from the
+available capacity in my tenant". Cowork and Copilot Code only get what is not allocated.
+
+- **Free for Cowork, Copilot Code:** new line on every card (pack minus everything allocated to environments) and an
+  alert when it drops below `thresholds.freePoolMin` (default 1,000).
+- **Shared-pool alert:** when Microsoft automatically assigns credits to an environment, and a list of environments
+  that may draw from the shared pool on the weekly and status cards.
+- **Pay-as-you-go links** are now read per environment, so linking or unlinking a policy is noticed even when the
+  policy list is refused to the service identity.
+- **Admin changes** name the environment when the audit amount matches exactly one allocation change.
+- `run_local.py --report agents`: credits per agent from Microsoft's licensing report, with your own admin login
+  (the report is not given to service identities).
+- `run_local.py --report m365`: Cowork, Copilot Code and other Microsoft 365 services per person this month
+  (Graph Copilot Cost Management API, delegated only; first run `az login --scope https://graph.microsoft.com/CopilotCostManagement.Read.All`).
+
 ## v1.2.1 (18 Nov 2026)
 
 - The daily run logs where the per-agent figures came from, the time per check, and any fallback used

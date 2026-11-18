@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from analysis import daily_series, forecast, pct
+from analysis import daily_series, forecast, free_pool, pct
 from i18n import T, n
 
 COLOR = {"red": "Attention", "amber": "Warning", "info": "Default", "good": "Good"}
@@ -75,6 +75,9 @@ def _pack_block(c: Card, snap: dict, series: list) -> None:
     if fc:
         rows.append((T(L, "projection"), f"{n(fc['projected'], L)} / {n(pk['entitled'], L)}"))
         rows.append((T(L, "runout"), fc["runout"] or T(L, "no_runout")))
+    free = free_pool(snap)
+    if free is not None:
+        rows.append((T(L, "free"), n(max(free, 0), L)))
     if pk.get("aiPurchased"):
         rows.append((T(L, "ai"), f"{n(pk.get('aiConsumed', 0), L)} / {n(pk['aiPurchased'], L)}"))
     price = c.cfg.get("pricing", {}).get("packPricePerMonth") or 0
@@ -107,6 +110,16 @@ def _env_block(c: Card, snap: dict, history: dict, days: int | None = None) -> N
     if rows:
         c.heading(T(L, "by_env"))
         c.facts(rows)
+
+
+def _pool_block(c: Card, snap: dict) -> None:
+    """Environments allowed to take credits from the shared pool (the rest Cowork and Copilot Code live on)."""
+    names = {k: v["name"] for k, v in (snap.get("environments") or {}).items()}
+    pd = snap.get("poolDraw") or {}
+    if pd:
+        c.heading(T(c.lang, "pool_title"))
+        c.text(", ".join(names.get(e, e) + (f" ({n(d['auto'], c.lang)})" if d.get("auto") else "")
+                         for e, d in sorted(pd.items(), key=lambda kv: names.get(kv[0], kv[0]))), subtle=True)
 
 
 def _agents_block(c: Card, snap: dict, top: int = 10) -> None:
@@ -185,6 +198,7 @@ def weekly(cfg, snap, history, alerts_log) -> dict:
         c.facts([(dt.date.fromisoformat(d).strftime("%a %d.%m"), f"{_bar(v, top)} {n(v, c.lang)}") for d, v in week])
         c.facts([(T(c.lang, "week_total"), n(sum(v for _, v in week), c.lang))])
     _env_block(c, snap, history, days=7)
+    _pool_block(c, snap)
     _agents_block(c, snap)
     _activity_block(c, snap)
     _orphans_block(c, snap, alerts_log)
@@ -245,8 +259,28 @@ def status(cfg, snap, history, alerts) -> dict:
         c.heading(T(c.lang, "changes"))
         c.alerts(alerts)
     _env_block(c, snap, history, days=1)
+    _pool_block(c, snap)
     _agents_block(c, snap, top=5)
     _orphans_block(c, snap, alerts)
+    return c.build()
+
+
+def agents(cfg, snap) -> dict:
+    """Credits per agent from the licensing report (run_local.py --report agents, with an admin login)."""
+    c = Card(cfg, "agents_title", snap)
+    _agents_block(c, snap, top=25)
+    return c.build()
+
+
+def m365_users(cfg, snap, users: dict, period: str) -> dict:
+    """Microsoft 365 services (Cowork, Copilot Code, …) per person (run_local.py --report m365)."""
+    c = Card(cfg, "m365_title", snap)
+    c.heading(period)
+    rows = sorted(users.values(), key=lambda u: -u["consumed"])
+    if rows:
+        c.facts([(u.get("name") or "?", T(c.lang, "m365_line", c=n(u["consumed"], c.lang), s=u["sessions"])) for u in rows])
+    else:
+        c.text(T(c.lang, "none"))
     return c.build()
 
 

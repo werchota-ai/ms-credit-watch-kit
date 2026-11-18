@@ -20,7 +20,10 @@ from store import Store  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--config", required=True)
-ap.add_argument("--report", default="status", choices=["daily", "weekly", "monthly", "status"])
+ap.add_argument("--report", default="status", choices=["daily", "weekly", "monthly", "status", "agents", "m365"],
+                help="agents = credits per agent from Microsoft's licensing report (needs your admin login); "
+                     "m365 = Cowork, Copilot Code etc. per person this month (needs: az login --scope "
+                     "https://graph.microsoft.com/CopilotCostManagement.Read.All)")
 ap.add_argument("--post", action="store_true")
 ap.add_argument("--scheduled", action="store_true")
 ap.add_argument("--json", action="store_true", help="print the Teams card JSON")
@@ -36,6 +39,30 @@ store = Store(tokens, folder=os.path.join(HERE, ".local-state"))
 hook = os.environ.get("TEAMS_WEBHOOK_URL") if a.post else None
 if a.post and not hook:
     sys.exit("Set TEAMS_WEBHOOK_URL first.")
+
+if a.report in ("agents", "m365") and not a.scheduled:
+    import datetime as dt
+    import collect
+    import reports
+    from engine import post
+    now = dt.datetime.now(dt.timezone.utc)
+    snap = {"time": now.isoformat(timespec="seconds"), "day": now.strftime("%Y-%m-%d"), "month": now.strftime("%Y-%m"),
+            "pack": {"dataDate": (now - dt.timedelta(days=1)).strftime("%Y-%m-%d")}}
+    if a.report == "agents":
+        first = now.strftime("%Y-%m-01")
+        rows = collect.licensing_report(tokens, "FeatureDetailsPerResource", first, now.strftime("%Y-%m-%d"), "Summary")
+        snap["agents"] = collect._agents_from_report(rows, first, now.strftime("%Y-%m-%d"))
+        card = reports.agents(cfg, snap)
+    else:
+        days = [(now.date().replace(day=1) + dt.timedelta(days=i)).isoformat() for i in range(now.day - 1)]
+        users = collect.m365_usage_by_user(tokens, days)
+        card = reports.m365_users(cfg, snap, users, f"{now.strftime('%Y-%m')}-01 … {(now - dt.timedelta(days=1)).strftime('%Y-%m-%d')}")
+    post(hook, card)
+    print(card["attachments"][0]["content"]["actions"][0]["card"]["body"][0]["value"])
+    print("
+posted to Teams." if hook else "
+(dry run - nothing posted)")
+    sys.exit(0)
 
 if a.scheduled:
     res = engine.scheduled(cfg, tokens, store, hook)

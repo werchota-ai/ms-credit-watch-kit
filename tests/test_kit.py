@@ -147,6 +147,43 @@ class Tests(unittest.TestCase):
         self.assertIn("Old flow (Contoso (default)), owner account disabled", txt)
         self.assertNotIn("(+0)", txt)
 
+    def test_free_pool_pool_draw_payg_and_audit_names(self):
+        h = history(5)
+        last = h.pop(max(h))
+        prev = copy.deepcopy(last)
+        prev["payg"] = {}
+        # the pack is fully assigned: nothing left for Cowork / Copilot Code
+        last["pack"]["allocatedTotal"] = 25000
+        last["poolDraw"] = {"e2": {"tenantPool": True, "auto": 2000}}
+        last["payg"] = {"p1": {"name": "Policy A", "environments": ["Default-1"]}}
+        last["allocations"] = {"Default-1": 13000, "e2": 6000}          # e2: 8,000 -> 6,000
+        last["audit"] = [{"time": "2026-11-18T19:43:00", "user": "admin@contoso.com", "kind": "allocation_changed",
+                          "amount": "-2000"}]
+        alerts, seen = analysis.evaluate(CFG, last, prev, h, [])
+        txt = json.dumps(alerts, ensure_ascii=False)
+        self.assertIn("Little room left for Cowork and Copilot Code", txt)
+        self.assertIn("Only 0 pack credits", txt)
+        self.assertIn("Sandbox: takes credits from the shared pool", txt)
+        self.assertIn("Policy A now linked to: Contoso (default)", txt)
+        self.assertIn("(-2000) · Sandbox", txt)                         # audit amount matched to the one environment
+        self.assertTrue(seen.get("freepool") and seen.get("pool:e2"))
+        # same state the next day: no repeat
+        prev2 = {**last, "notified": seen}
+        again, _ = analysis.evaluate(CFG, last, prev2, h, [])
+        self.assertNotIn("Little room left", json.dumps(again))
+        card = json.dumps(reports.status(CFG, last, h, alerts), ensure_ascii=False)
+        self.assertIn("Free for Cowork, Copilot Code (not allocated)", card)
+
+    def test_agents_and_m365_cards(self):
+        h = history(2)
+        last = h.pop(max(h))
+        last["agents"] = {"source": "report", "to": "2026-11-17",
+                          "items": {"a": {"name": "HR Helper", "consumed": 120.0, "features": {"Process Agent": 120.0}}}}
+        self.assertIn("HR Helper", json.dumps(reports.agents(CFG, last)))
+        users = {"u1": {"name": "Anna", "consumed": 203.0, "sessions": 2}}
+        self.assertIn("203 credits · 2 sessions",
+                      json.dumps(reports.m365_users(CFG, last, users, "2026-11-01 … 2026-11-17"), ensure_ascii=False))
+
     def test_hmac_and_commands(self):
         secret = base64.b64encode(b"0123456789abcdef").decode()
         body = json.dumps({"text": "<at>Credit Watch</at> weekly", "from": {"name": "Anna"}}).encode()

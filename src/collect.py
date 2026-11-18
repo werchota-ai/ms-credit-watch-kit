@@ -68,9 +68,13 @@ class Tokens:
                 tok = json.load(r)["access_token"]
         else:
             az = "az.cmd" if os.name == "nt" else "az"
-            tok = subprocess.run([az, "account", "get-access-token", "--resource", res,
-                                  "--query", "accessToken", "-o", "tsv"],
-                                 capture_output=True, text=True, check=True).stdout.strip()
+            # a full scope (https://graph.microsoft.com/Some.Permission) needs --scope, a bare resource --resource
+            kind = "--scope" if urllib.parse.urlparse(res).path.strip("/") else "--resource"
+            p = subprocess.run([az, "account", "get-access-token", kind, res, "--query", "accessToken", "-o", "tsv"],
+                               capture_output=True, text=True)
+            if p.returncode:
+                raise RuntimeError(f"az could not get a token for {res}: {p.stderr.strip()[:300]}")
+            tok = p.stdout.strip()
         self._cache[res] = tok
         return tok
 
@@ -223,7 +227,10 @@ def collect(cfg: dict, tokens: Tokens, now: dt.datetime, skip: tuple = (), state
     def pack():
         t = http("GET", f"{lic}/entitlements/MCSMessages?api-version=1", tokens.get("pp"))["entitlement"]["capacity"]
         r = {"entitled": t["entitled"]["value"], "consumed": round(t["consumed"]["value"], 2),
-             "dataDate": (t["consumed"].get("lastUpdatedOn") or "")[:10]}
+             "dataDate": (t["consumed"].get("lastUpdatedOn") or "")[:10],
+             # everything assigned to environments, including Microsoft's automatic assignments;
+             # the rest of the pack is what Cowork, Copilot Code and other Microsoft 365 services can use
+             "allocatedTotal": (t.get("allocated") or {}).get("value")}
         for c in http("GET", f"{lic}/tenantCapacity/CurrencyReports?includeAllocations=True&includeConsumptions=True&api-version=1",
                       tokens.get("pp")):
             if c["currencyType"] == "AI":
@@ -268,6 +275,26 @@ def collect(cfg: dict, tokens: Tokens, now: dt.datetime, skip: tuple = (), state
                 out[env_id] = v
         return out
 
+    def pool_draw():
+        """Environments that may take credits from the shared pool (TenantPool rule) and what Microsoft gave them."""
+        out = {}
+        for env_id in envs:
+            f = urllib.parse.quote(f"environmentId eq '{env_id}' and EntitlementId in ('MCSMessages')")
+            try:
+                r = http("GET", f"{PUB}/allocationsV2?api-version=2024-10-01&$filter={f}", tokens.get("pp")) or {}
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    continue
+                raise
+            for a in r.get("allocatedEntitlements", []):
+                if a.get("entitlementId") != "MCSMessages":
+                    continue
+                rules = {x.get("ruleType"): x.get("enabled") for x in a.get("enforcementRules") or []}
+                auto = (a.get("allocation") or {}).get("autoAllocated") or 0
+                if rules.get("TenantPool") or auto:
+                    out[env_id] = {"tenantPool": bool(rules.get("TenantPool")), "auto": auto}
+        return out
+
     def payg():
         out = {}
         try:
@@ -276,6 +303,15 @@ def collect(cfg: dict, tokens: Tokens, now: dt.datetime, skip: tuple = (), state
                 out[b["id"]] = {"name": b["name"], "environments": sorted(x["environmentId"] for x in le.get("value", []))}
         except urllib.error.HTTPError:
             pass   # the list is often refused to service principals; the environments' own link below still works
+        for env_id in envs:
+            try:
+                b = http("GET", f"{PUB}/environments/{env_id}/billingPolicy?api-version=2022-03-01-preview", tokens.get("pp"))
+            except urllib.error.HTTPError:
+                continue   # 404 = no policy linked
+            if b and b.get("id"):
+                p = out.setdefault(b["id"], {"name": b.get("name") or b["id"][:8], "environments": []})
+                if env_id not in p["environments"]:
+                    p["environments"] = sorted(p["environments"] + [env_id])
         for env_id, e in envs.items():
             pid = e.get("billingPolicy")
             if pid:
@@ -287,6 +323,7 @@ def collect(cfg: dict, tokens: Tokens, now: dt.datetime, skip: tuple = (), state
     part("consumption", "credits", consumption)
     part("allocations", "allocations", allocations)
     part("payg", "payAsYouGo", payg)
+    part("poolDraw", "allocations", pool_draw)
 
     def orphan_flows():
         """Active flows whose owner account is disabled or deleted (they keep failing or run as nobody)."""
@@ -466,3 +503,30 @@ def collect(cfg: dict, tokens: Tokens, now: dt.datetime, skip: tuple = (), state
 
     part("audit", "audit", audit)
     return snap, errors
+
+
+def m365_usage_by_user(tokens: Tokens, days: list[str]) -> dict:
+    """Copilot Credits used per person in Microsoft 365 services (Cowork, Copilot Code, Work IQ API, …).
+
+    Microsoft Graph Copilot Cost Management API (beta). Delegated permission only, so it works with an admin's own
+    login (run_local.py), not with the service identity. One call per completed UTC day.
+    """
+    tok = tokens.get("https://graph.microsoft.com/CopilotCostManagement.Read.All")
+    users: dict = {}
+    for d in days:
+        end = (dt.date.fromisoformat(d) + dt.timedelta(days=1)).isoformat()
+        url = f"https://graph.microsoft.com/beta/copilot/costManagement/usageReports/userUsageRecords?startDate={d}&endDate={end}"
+        while url:
+            r = http("GET", url, tok) or {}
+            for x in r.get("value", []):
+                u = users.setdefault(x["userId"], {"consumed": 0.0, "sessions": 0})
+                u["consumed"] += x.get("consumedQuantity") or 0
+                u["sessions"] += x.get("sessionCount") or 0
+            url = r.get("@odata.nextLink")
+    for uid, u in users.items():
+        u["consumed"] = round(u["consumed"], 2)
+        try:
+            u["name"] = http("GET", f"{GRAPH}/users/{uid}?$select=displayName", tokens.get("graph")).get("displayName")
+        except Exception:  # noqa: BLE001
+            u["name"] = uid[:8]
+    return users
